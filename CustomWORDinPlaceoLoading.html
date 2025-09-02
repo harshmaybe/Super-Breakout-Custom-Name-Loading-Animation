@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Text → _ (ASCII) Converter</title>
+  <style>
+    body { margin: 0; background: #f3f3eb; color: #0d0d19; font: 14px/1.45 system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
+    .wrap { max-width: 980px; margin: 24px auto; padding: 0 16px; }
+    h1 { font: 600 18px/1.2 system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 0 0 12px; }
+    .row { display: grid; grid-template-columns: 1fr; gap: 16px; }
+    .controls { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    input[type="text"] { padding: 8px 10px; border: 1px solid #bbb; border-radius: 6px; width: 360px; background: #fff; }
+    .btn { padding: 8px 12px; border: 1px solid #0d0d19; border-radius: 6px; background: #0d0d19; color: #fff; cursor: pointer; }
+    .btn.secondary { background: #fff; color: #0d0d19; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .panel { background: #fff; border: 1px solid #e1e1da; border-radius: 8px; padding: 12px; }
+    .panel h2 { margin: 0 0 8px; font: 600 14px/1.2 system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
+    pre, textarea { width: 100%; box-sizing: border-box; border: 1px solid #ddd; border-radius: 6px; background: #fff; padding: 12px; }
+    pre { margin: 0; white-space: pre; overflow: auto; font: 13px/1.05 Menlo, Consolas, "Liberation Mono", Monaco, "Courier New", monospace; }
+    textarea { height: 260px; resize: vertical; font: 12px/1.15 Menlo, Consolas, "Liberation Mono", Monaco, "Courier New", monospace; }
+    .note { color: #555; font-size: 12px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Text → underscore ASCII</h1>
+    <div class="row">
+      <div class="controls">
+        <input id="textInput" type="text" value="LOADING" placeholder="Enter text to render (A–Z, 0–9, symbols)" />
+        <button id="renderBtn" class="btn">Render</button>
+        <button id="copyAsciiBtn" class="btn secondary">Copy ASCII</button>
+        <button id="copyArrayBtn" class="btn secondary">Copy JS Array</button>
+        <span class="note">Monospaced preview for consistent alignment</span>
+      </div>
+
+      <div class="grid">
+        <div class="panel">
+          <h2>Preview (ASCII)</h2>
+          <pre id="preview"></pre>
+        </div>
+        <div class="panel">
+          <h2>JS Array (BRICK_ART style)</h2>
+          <textarea id="arrayOut" spellcheck="false"></textarea>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // 5x7 blocky glyphs: '1' = underscore pixel, '0' = space
+    const GLYPHS = {
+      ' ': ["00000","00000","00000","00000","00000","00000","00000"],
+      'B': ["11110","10001","10001","11110","10001","10001","11110"],
+      'E': ["11111","10000","10000","11111","10000","10000","11111"],
+      'F': ["11111","10000","10000","11111","10000","10000","10000"],
+      'H': ["10001","10001","10001","11111","10001","10001","10001"],
+      'I': ["01110","00100","00100","00100","00100","00100","01110"],
+      'J': ["00011","00001","00001","00001","10001","10001","11110"],
+      'K': ["10001","10010","10100","11000","10100","10010","10001"],
+      'L': ["10000","10000","10000","10000","10000","10000","11111"],
+      'M': ["10001","11011","10101","10001","10001","10001","10001"],
+      'N': ["10001","11001","10101","10011","10001","10001","10001"],
+      'P': ["11110","10001","10001","11110","10000","10000","10000"],
+      'R': ["11110","10001","10001","11110","10100","10010","10001"],
+      'T': ["11111","00100","00100","00100","00100","00100","00100"],
+      'U': ["10001","10001","10001","10001","10001","10001","11111"],
+      'V': ["10001","10001","10001","10001","01010","01010","00100"],
+      'W': ["10001","10001","10001","10101","10101","11011","10001"],
+      'X': ["10001","01010","00100","00100","00100","01010","10001"],
+      'Y': ["10001","01010","00100","00100","00100","00100","00100"],
+  A: ["01110","10001","10001","11111","10001","10001","10001"], // rounded cap
+  C: ["01110","10001","10000","10000","10000","10001","01110"], // open right
+  D: ["11110","10001","10001","10001","10001","10001","11110"], // curved right
+  G: ["01110","10001","10000","10111","10001","10001","01110"], // notch/open
+  O: ["01110","10001","10001","10001","10001","10001","01110"], // round
+  Q: ["01110","10001","10001","10001","10101","10010","01101"], // tail
+  S: ["01111","10000","10000","01110","00001","00001","11110"], // softer S
+  Z: ["11111","00010","00100","00100","01000","10000","11111"], // standard Z
+      '!': ["00100","00100","00100","00100","00100","00000","00100"],
+      '@': ["11111","10001","10111","10101","10111","10000","11111"],
+      '#': ["01010","11111","01010","11111","01010","11111","01010"],
+      '$': ["00100","11111","10100","01110","00101","11111","00100"],
+      '%': ["11000","11001","00010","00100","01000","10011","00011"],
+      '^': ["00100","01010","10001","00000","00000","00000","00000"],
+      '&': ["01100","10010","10100","01000","10101","10010","01101"],
+      '*': ["00000","01010","00100","11111","00100","01010","00000"],
+      '(': ["00010","00100","01000","01000","01000","00100","00010"],
+      ')': ["01000","00100","00010","00010","00010","00100","01000"],
+      '_': ["00000","00000","00000","00000","00000","00000","11111"],
+      '-': ["00000","00000","00000","11111","00000","00000","00000"],
+      '+': ["00000","00100","00100","11111","00100","00100","00000"],
+      '=': ["00000","11111","00000","11111","00000","00000","00000"],
+      '{': ["00011","00100","00100","11000","00100","00100","00011"],
+      '}': ["11000","00100","00100","00011","00100","00100","11000"],
+      '[': ["11100","10000","10000","10000","10000","10000","11100"],
+      ']': ["00111","00001","00001","00001","00001","00001","00111"],
+      ':': ["00000","00100","00000","00000","00000","00100","00000"],
+      ';': ["00000","00100","00000","00000","00000","00100","01000"],
+      '"': ["01010","01010","00000","00000","00000","00000","00000"],
+      "'": ["00100","00100","00000","00000","00000","00000","00000"],
+      '<': ["00010","00100","01000","10000","01000","00100","00010"],
+      ',': ["00000","00000","00000","00000","00000","00100","01000"],
+      '>': ["01000","00100","00010","00001","00010","00100","01000"],
+      '.': ["00000","00000","00000","00000","00000","00110","00110"],
+      '?': ["11111","10001","00010","00100","00100","00000","00100"],
+      '/': ["00001","00010","00100","01000","10000","00000","00000"],
+      '₹': ["11110","00001","11100","00100","11100","00100","00100"],
+    };
+    const DEFAULT_GLYPH = ["11111","10001","10101","10001","10101","10001","11111"];
+
+    // Render parameters: 2-char “pixels”, 4-space inter-letter gap, 12 rows
+    const PAIR_WIDTH = 2;
+    const CHAR_SPACING = 4;
+    const TARGET_ROWS = 12;
+
+    function scaleBitsRow(bits, sx = PAIR_WIDTH) {
+      return bits.split('').map(ch => ch === '1' ? '_'.repeat(sx) : ' '.repeat(sx)).join('');
+    }
+    function verticalExpand(rows7, target = TARGET_ROWS) {
+      const out = [];
+      const h = 7;
+      for (let r = 0; r < h; r++) {
+        const start = Math.floor(r    * target / h);
+        const end   = Math.floor((r+1) * target / h);
+        const reps = Math.max(1, end - start);
+        for (let k = 0; k < reps; k++) out.push(rows7[r]);
+      }
+      return out;
+    }
+    function renderUnderscores(text, sx = PAIR_WIDTH, spacing = CHAR_SPACING, rows = TARGET_ROWS) {
+      const keys = Array.from(text).map(ch => (ch >= 'a' && ch <= 'z') ? ch.toUpperCase() : ch);
+      const bitmaps = keys.map(k => GLYPHS[k] || DEFAULT_GLYPH);
+      const base7 = [];
+      for (let r = 0; r < 7; r++) {
+        const segs = bitmaps.map(bmp => scaleBitsRow(bmp[r], sx));
+        base7.push(segs.join(' '.repeat(spacing)));
+      }
+      const lines = verticalExpand(base7, rows);
+      const maxw = Math.max(...lines.map(s => s.length));
+      return lines.map(s => s.padEnd(maxw, ' '));
+    }
+    function toJsArrayLiteral(lines, useBackticks = true) {
+      const indent = '    ';
+      if (useBackticks) {
+        return '[\n' + lines.map((ln, i) => `${indent}\`${ln}\`${i < lines.length - 1 ? ',' : ''}`).join('\n') + '\n]';
+      } else {
+        // Use quotes to avoid backticks if desired
+        const esc = s => s.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+        return '[\n' + lines.map((ln, i) => `${indent}"${esc(ln)}"${i < lines.length - 1 ? ',' : ''}`).join('\n') + '\n]';
+      }
+    }
+
+    const textInput = document.getElementById('textInput');
+    const renderBtn = document.getElementById('renderBtn');
+    const preview = document.getElementById('preview');
+    const arrayOut = document.getElementById('arrayOut');
+    const copyAsciiBtn = document.getElementById('copyAsciiBtn');
+    const copyArrayBtn = document.getElementById('copyArrayBtn');
+
+    function update() {
+      const text = (textInput.value || 'LOADING').toString();
+      const lines = renderUnderscores(text);
+      preview.textContent = lines.join('\n');
+      arrayOut.value = toJsArrayLiteral(lines, true);
+    }
+
+    async function copyText(str) {
+      try {
+        await navigator.clipboard.writeText(str);
+        alert('Copied to clipboard.');
+      } catch {
+        const ta = document.createElement('textarea');
+        ta.value = str;
+        ta.style.position = 'fixed';
+        ta.style.top = '-1000px';
+        document.body.appendChild(ta);
+        ta.focus();
+        ta.select();
+        try {
+          document.execCommand('copy');
+          alert('Copied to clipboard.');
+        } finally {
+          document.body.removeChild(ta);
+        }
+      }
+    }
+
+    renderBtn.addEventListener('click', update);
+    copyAsciiBtn.addEventListener('click', () => copyText(preview.textContent));
+    copyArrayBtn.addEventListener('click', () => copyText(arrayOut.value));
+
+    // Initial render
+    update();
+  </script>
+</body>
+</html>
